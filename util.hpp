@@ -2,6 +2,9 @@
 //#ifndef _WIN32
 
 #include<iostream>
+#include<fstream>
+#include<string>
+#include <boost/filesystem.hpp>
 #include<stdint.h>
 #include<WS2tcpip.h>
 #include<iphlpapi.h> //获取网卡信息接口的头文件
@@ -12,6 +15,55 @@
 //linux环境头文件
 //#endif
 
+class FileUtil
+{
+public:
+	static bool Write(const std::string& name, const std::string& body, int64_t offset = 0) //向指定文件的指定未知写入指定数据 //offset(偏移量)
+	{
+		std::ofstream ofs(name);
+		if (ofs.is_open() == false)
+		{
+			std::cerr << "打开文件失败" << std::endl;
+			return false;
+		}
+		ofs.seekp(offset, std::ios::beg);  //读写位置跳转到相对于文件起始位置开始偏移offset的偏移量
+		//ofstream.seekp(uint32_t offset 偏移量, std::ios::beg 开始偏移的位置)
+		ofs.write(&body[0], body.size());
+		//ofstream.write(const char* body 要写入的数据, size_t len)
+		if (ofs.good() == false)
+		{
+			std::cerr << "向文件写入数据失败\n";
+			ofs.close();
+			return false;
+		}
+		ofs.close();
+		return true;
+	}
+	//指针参数表示这是一个输出型参数
+	//const &表示这是一个输入型参数
+	//&表示这是一个输入输出型参数
+	static bool Read(const std::string& name, std::string* body)
+	{
+		std::ifstream ifs(name);
+		if (ifs.is_open() == false)
+		{
+			std::cerr << "打开文件失败\n";
+			return false;
+		}
+		int64_t filesize = boost::filesystem:: file_size(name);
+		body->resize(filesize);
+		ifs.read(&(*body)[0], filesize); 
+		if (ifs.good() == false)
+		{
+			std::cerr << "读取文件数据失败\n";
+			ifs.close();
+			return false;
+		}
+		ifs.close();
+		return true;
+	}
+
+};
 
 class Adapter //网卡信息结构空间
 {
