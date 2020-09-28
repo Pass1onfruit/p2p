@@ -3,12 +3,17 @@
 #pragma once
 #include<thread>
 #include "util.hpp"
-#include"httplib.h"
+#include"httplib2.h"
 #include <boost/filesystem.hpp>
+//#include<unordered_map>
 
 #define P2P_PORT 9000
 #define MAX_IPBUFFER 16
-#define SHARED_PATH "./Shared"
+#define SHARED_PATH "./Shared/"
+#define DOWNLOAD_PATH "./Download/"
+//1左移10位是1K，左移20位是1M
+//#define MAX_RANGE 100 << 20
+#define MAX_RANGE (5)
 
 
 class Host
@@ -126,6 +131,7 @@ public:
 		std::cin >> select_ip;
 		GetSharelist(select_ip); //用户选择主机之后,调用获取文件列表接口
 		//GetSharelist(select_ip);
+		return true;
 	}
 	//获取文件列表
 	bool GetSharelist(const std::string &host_ip)
@@ -149,8 +155,10 @@ public:
 
 			return true;
 		}
+		return true;
 	}
-		//下载文件
+
+	//下载文件
 	bool DonwloadFile(const std::string& host_ip, const std::string& filename)
 	{
 		//1,向服务端发送文件下载请求"/filename"
@@ -158,90 +166,29 @@ public:
 		//3,创建文件,将文件数据写入文件中,关闭文件
 		std::string req_path = "/download/" + filename;
 		httplib::Client cli(host_ip.c_str(), P2P_PORT);
+		std::cout << "向服务端发送文件下载请求中" << host_ip << ":" << req_path << std::endl;
 		auto rsp = cli.Get(req_path.c_str());
 		if (rsp == NULL || rsp->status != 200)
 		{
-			std::cerr << "下载文件,获取响应信息失败\n";
+			std::cerr << "获取文件下载响应失败\n";
 			return false;
 		}
+
+		std::cout << "获取文件下载响应成功" << std::endl;
+		//判断文件是否存在，如果不存在就创建
+		if (!boost::filesystem::exists(DOWNLOAD_PATH))
+			boost::filesystem::create_directory(DOWNLOAD_PATH);//创建文件
+		std::string realpath = DOWNLOAD_PATH + filename;
 		if (FileUtil::Write(filename, rsp->body) == false)
 		{
 			std::cerr << "文件下载失败\n";
 			return false;
 		}
+		std::cout << "文件下载成功" << std::endl;
 		return true;
 	}
 
 private:
 	std::vector<Host>  _online_host;
 
-};
-
-class _Server
-{
-public:
-	bool Start()
-	{
-		//添加针对客户端请求的处理方式对应关系
-		_srv.Get("/hostpair", HostPair);
-		_srv.Get("/list", ShareList);
-		//正则表达式:将特殊字符以指定的格式,表示表示具有关键特征的数据
-		//正则表达式中.:匹配除\n或\r之外的任意字符*:表示匹配前边的字符任意次
-		//防止与上方的请求冲突,因此在请求中加入download路径
-		_srv.Get("/download/.*", Download);
-
-		_srv.listen("0.0.0.0", P2P_PORT);
-		return true;
-	}
-private:
-	static void HostPair(const httplib::Request& req, httplib::Response& rsp)
-	{
-		return;
-	}
-	//获取共享文件列表-在主机上设置一个共享目录,凡是这个目录下的文件都是要共享给别人的
-	static void ShareList(const httplib::Request& req, httplib::Response& rsp)
-	{
-		boost::filesystem::directory_iterator begin(SHARED_PATH);//实例化目录迭代器
-		boost::filesystem::directory_iterator end;//实例化目录迭代器的末尾
-											   //开始选代目录
-		for (; begin != end; ++begin)
-		{
-			if (boost::filesystem::is_directory(begin->status()))
-			{
-				//当前版本我们之获取普通文件名称,不做多层级目录的操作
-				continue;
-			}
-			std::string name = begin->path().string();
-			rsp.body += name + "\r\n"; //filenamel\r\nfilename2\r\n.....
-		}
-		rsp.status = 200;
-		return;
-	}
-	//下载文件
-	static void Download(const httplib::Request& req, httplib::Response& rsp)
-	{
-		//req.path - 客户端请求的资源路径   /download/filename.txt
-		boost::filesystem::path reqpath(req.path);
-	    //boost::filesystem::path(). filename()    只获取文件名称; abc/filename.txt -> filename.tx
-		std::string name = reqpath.filename().string();//只获取文件名称  filename.txt
-		std::string realpath = SHARED_PATH + '/' + name;//实际文件的路径应该是在共享的目录下
-		//boost: :filesystem: :exists()判断文件是否存在
-		if (boost::filesystem::exists(realpath) || boost::filesystem::is_directory(realpath))
-		{
-			rsp.status = 404;
-			return;
-		}
-		//文件出错
-		if (FileUtil::Read(realpath, &rsp.body) == false)
-		{
-			rsp.status = 500;
-			return;
-		}
-		//FileUtil::Read(name, &rsp.body);
-		//正确处理
-		rsp.status = 200;
-		return;
-	}
-private:
-	httplib::Server _srv;
 };
