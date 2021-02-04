@@ -15,7 +15,6 @@
 //#define MAX_RANGE 100 << 20
 #define MAX_RANGE (5)
 
-
 class Host
 {
 public:
